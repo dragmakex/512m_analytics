@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 YIELDS_ENDPOINT = "https://yields.llama.fi/pools"
 CHART_ENDPOINT = "https://yields.llama.fi/chart/"
 
-def fetch_top_stablecoin_pools_by_tvl(limit=50):
+def fetch_top_stablecoin_pools_by_tvl(limit=100):
     """
     Fetch the top stablecoin pools by TVL from DeFiLlama yields API
     
@@ -323,9 +323,9 @@ def main():
     """
     Main function to fetch, process, and save DeFi Prime Rate data
     """
-    # Fetch top 50 stablecoin pools by TVL
-    print("\n=== Fetching top 50 stablecoin pools by TVL ===")
-    top_pools = fetch_top_stablecoin_pools_by_tvl(50)
+    # Fetch top 100 stablecoin pools by TVL
+    print("\n=== Fetching top 100 stablecoin pools by TVL ===")
+    top_pools = fetch_top_stablecoin_pools_by_tvl(100)
     
     if not top_pools:
         print("No pools fetched. Exiting.")
