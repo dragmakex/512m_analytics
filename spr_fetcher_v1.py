@@ -45,7 +45,7 @@ def fetch_top_stablecoin_pools_by_tvl(limit=100):
         print(f"Error fetching pools: {e}")
         return []
 
-def fetch_pool_chart_data(pool_id, pool_name, days=180):
+def fetch_pool_chart_data(pool_id, pool_name, days=360):
     """
     Fetch historical chart data for a specific pool with rate limiting
     
