@@ -25,12 +25,24 @@ def fetch_top_stablecoin_pools_by_tvl(limit=100):
         if response.status_code == 200:
             data = response.json()
             
-            # Filter for stablecoin pools only
+            # Filter for stablecoin pools only, excluding Merkl (yield farming) and 0% APY pools
             stablecoin_pools = []
+            merkl_pools_excluded = 0
+            zero_apy_pools_excluded = 0
             for pool in data['data']:
                 if (pool.get('tvlUsd') is not None and pool['tvlUsd'] > 0 and 
                     pool.get('stablecoin') == True):
-                    stablecoin_pools.append(pool)
+                    if pool.get('project') == 'merkl':
+                        merkl_pools_excluded += 1
+                    elif pool.get('apy', 0) == 0:
+                        zero_apy_pools_excluded += 1
+                    else:
+                        stablecoin_pools.append(pool)
+            
+            if merkl_pools_excluded > 0:
+                print(f"Excluded {merkl_pools_excluded} Merkl yield farming pools")
+            if zero_apy_pools_excluded > 0:
+                print(f"Excluded {zero_apy_pools_excluded} pools with 0% APY")
             
             # Sort by TVL and get top pools
             stablecoin_pools.sort(key=lambda x: x['tvlUsd'], reverse=True)
@@ -113,6 +125,31 @@ def fetch_pool_chart_data(pool_id, pool_name, days=360):
     except Exception as e:
         print(f"Error fetching chart data for pool {pool_name}: {e}")
         return None
+
+def purge_database(db_filename="defi_prime_rate.db"):
+    """
+    Completely purge the database before fresh data insertion
+    
+    Args:
+        db_filename (str): SQLite database filename
+    """
+    print(f"Purging existing database: {db_filename}")
+    try:
+        conn = sqlite3.connect(db_filename)
+        cursor = conn.cursor()
+        
+        # Drop existing tables if they exist
+        cursor.execute("DROP TABLE IF EXISTS pool_data")
+        cursor.execute("DROP TABLE IF EXISTS pool_metadata")
+        
+        # Clean up any other artifacts
+        cursor.execute("VACUUM")
+        
+        conn.commit()
+        conn.close()
+        print("Database purged successfully")
+    except Exception as e:
+        print(f"Warning: Could not purge database: {e}")
 
 def merge_and_save_pool_data(pool_data, db_filename="defi_prime_rate.db"):
     """
@@ -223,6 +260,11 @@ def merge_and_save_pool_data(pool_data, db_filename="defi_prime_rate.db"):
     print(f"Saving data to SQLite database: {db_filename}")
     conn = sqlite3.connect(db_filename)
     
+    # Ensure we're starting with a clean slate
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS pool_data")
+    cursor.execute("DROP TABLE IF EXISTS pool_metadata")
+    
     # Save main data
     merged_df.to_sql('pool_data', conn, if_exists='replace', index=True)
     
@@ -250,6 +292,9 @@ def merge_and_save_pool_data(pool_data, db_filename="defi_prime_rate.db"):
     metadata_df = pd.DataFrame(pool_metadata)
     metadata_df.to_sql('pool_metadata', conn, if_exists='replace', index=False)
     
+    # Final cleanup
+    cursor.execute("VACUUM")
+    conn.commit()
     conn.close()
     print(f"Data successfully saved to {db_filename}")
     print(f"Final dataset contains {len(final_pool_names)} pools with valid data")
@@ -323,6 +368,10 @@ def main():
     """
     Main function to fetch, process, and save DeFi Prime Rate data
     """
+    # Purge existing database to ensure fresh data
+    print("\n=== Purging existing database ===")
+    purge_database()
+    
     # Fetch top 100 stablecoin pools by TVL
     print("\n=== Fetching top 100 stablecoin pools by TVL ===")
     top_pools = fetch_top_stablecoin_pools_by_tvl(100)
@@ -373,11 +422,20 @@ def main():
     print(f"Date range: {merged_df.index.min()} to {merged_df.index.max()}")
     print(f"Total data points: {len(merged_df)}")
     
+    # Verify data freshness
+    latest_date = merged_df.index.max()
+    current_date = datetime.now().date()
+    days_old = (current_date - latest_date).days
+    print(f"Latest data date: {latest_date} (data is {days_old} days old)")
+    
     if 'weighted_apy' in merged_df.columns:
         current_apy = merged_df['weighted_apy'].iloc[-1]
         mean_apy = merged_df['weighted_apy'].mean()
         print(f"Current DeFi Prime Rate: {current_apy:.4f}%")
         print(f"Mean DeFi Prime Rate: {mean_apy:.4f}%")
+    
+    print(f"\nDatabase has been completely refreshed with current data.")
+    print(f"All old data has been purged to prevent stale information.")
 
 if __name__ == "__main__":
     main()
