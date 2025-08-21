@@ -1,31 +1,25 @@
-# -----------------------------------------------------------------------------
-# There's still issues with the calculation of the rolling correlation
-# Will be fixed in the future -> check the raw data pulled from Polygon.io
-# Don't worry about it for now
-# -----------------------------------------------------------------------------
-
 import os
 import requests
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from PIL import Image
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Theme palette
+# Theme palette (from spr_plotter.py)
 theme_palette = ['#f7f3ec', '#ede4da', '#b9a58f', '#574c40', '#36312a']
 muted_blues = [
     '#2b3e50', '#3c5a77', '#4f7192', '#5f86a8', '#6f9bbd',
     '#86abc7', '#9bbad1', '#afc8da', '#c3d5e3', '#d7e2ec'
 ]
 
-# Set academic-style plotting
+# Set academic-style plotting with serif fonts and beige background (matching spr_plotter.py)
 plt.style.use('default')
 plt.rcParams.update({
     'font.family': 'serif',
@@ -40,23 +34,43 @@ plt.rcParams.update({
     'axes.linewidth': 0.8,
     'grid.linewidth': 0.5,
     'grid.alpha': 0.3,
+    # Background from palette (first color)
     'figure.facecolor': theme_palette[0],
     'axes.facecolor': theme_palette[0],
     'savefig.facecolor': theme_palette[0]
 })
 
-def add_logo_overlay(ax, logo_path="512m_logo.png", alpha=0.1):
-    """Add logo overlay to the center of the plot"""
+def add_logo_overlay(ax, logo_path="512m_logo.png", alpha=0.05):
+    """
+    Add logo overlay to the center of the plot
+    
+    Args:
+        ax: matplotlib axis object
+        logo_path (str): path to logo image
+        alpha (float): transparency level (0-1)
+    """
     try:
+        # Load the logo image
         logo_img = Image.open(logo_path)
+        
+        # Convert to numpy array and normalize
         logo_array = np.array(logo_img)
+        
+        # Get the center of the plot
         x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) / 2
         y_center = (ax.get_ylim()[0] + ax.get_ylim()[1]) / 2
+        
+        # Calculate appropriate size for the logo (about 28% of plot width - 30% smaller than before)
         plot_width = ax.get_xlim()[1] - ax.get_xlim()[0]
-        logo_width = plot_width * 0.4
+        logo_width = plot_width * 0.2
+        
+        # Create offset image
         im = OffsetImage(logo_array, zoom=logo_width/logo_img.width, alpha=alpha)
+        
+        # Create annotation box at center
         ab = AnnotationBbox(im, (x_center, y_center), frameon=False)
         ax.add_artist(ab)
+        
     except Exception as e:
         print(f"Warning: Could not add logo overlay: {e}")
 
@@ -89,278 +103,289 @@ def fetch_polygon_data(symbol, start_date, end_date, api_key):
             df.set_index('date', inplace=True)
             
             print(f"Successfully fetched {len(df)} data points for {symbol}")
-            print(f"Date range: {df.index.min()} to {df.index.max()}")
             return df
         else:
-            print(f"No data returned for {symbol}. Response: {data}")
+            print(f"No data returned for {symbol}")
             return None
             
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
         return None
 
-def calculate_rolling_correlation_detailed(returns_df, asset1, asset2, window=30):
-    """
-    Calculate rolling correlation with detailed debugging information
-    
-    Args:
-        returns_df (pd.DataFrame): DataFrame with returns
-        asset1 (str): First asset name
-        asset2 (str): Second asset name
-        window (int): Rolling window size
-        
-    Returns:
-        pd.Series: Rolling correlation series
-    """
-    print(f"\n=== Detailed 30-day Correlation Analysis for {asset1} vs {asset2} ===")
-    
-    # Calculate rolling correlation
-    corr_series = returns_df[asset1].rolling(window=window, center=False, min_periods=window//2).corr(returns_df[asset2])
-    
-    # Get valid correlations
-    valid_corr = corr_series.dropna()
-    
-    if len(valid_corr) == 0:
-        print(f"No valid correlations found for {window}-day window")
-        return corr_series
-    
-    print(f"Total observations: {len(returns_df)}")
-    print(f"Valid correlations: {len(valid_corr)}")
-    print(f"Correlation statistics:")
-    print(f"  Mean: {valid_corr.mean():.4f}")
-    print(f"  Std: {valid_corr.std():.4f}")
-    print(f"  Min: {valid_corr.min():.4f}")
-    print(f"  Max: {valid_corr.max():.4f}")
-    print(f"  Median: {valid_corr.median():.4f}")
-    
-    # Check for high correlations
-    high_corr_90 = (valid_corr > 0.9).sum()
-    high_corr_80 = (valid_corr > 0.8).sum()
-    high_corr_70 = (valid_corr > 0.7).sum()
-    
-    print(f"Correlations > 90%: {high_corr_90} ({high_corr_90/len(valid_corr)*100:.1f}%)")
-    print(f"Correlations > 80%: {high_corr_80} ({high_corr_80/len(valid_corr)*100:.1f}%)")
-    print(f"Correlations > 70%: {high_corr_70} ({high_corr_70/len(valid_corr)*100:.1f}%)")
-    
-    # Show recent correlations
-    recent_corr = valid_corr.tail(10)
-    print(f"Recent 10 correlations: {recent_corr.values}")
-    
-    # Show highest correlations
-    top_corr = valid_corr.nlargest(5)
-    print(f"Top 5 correlations: {top_corr.values}")
-    print(f"Top 5 correlation dates: {top_corr.index}")
-    
-    # Show lowest correlations
-    bottom_corr = valid_corr.nsmallest(5)
-    print(f"Bottom 5 correlations: {bottom_corr.values}")
-    print(f"Bottom 5 correlation dates: {bottom_corr.index}")
-    
-    return corr_series
-
-def plot_correlation_analysis(returns_df, corr_btc, corr_eth):
-    """Create comprehensive correlation analysis plots"""
-    
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    axes = axes.flatten()
-    
-    # Plot 1: 30-day rolling correlations
-    ax1 = axes[0]
-    ax1.plot(corr_btc.index, corr_btc, label='BTC vs S&P 500', linewidth=2, color=muted_blues[0])
-    ax1.plot(corr_eth.index, corr_eth, label='ETH vs S&P 500', linewidth=2, color=muted_blues[2])
-    ax1.axhline(y=0, color=theme_palette[3], linestyle='--', alpha=0.7, linewidth=1)
-    ax1.axhline(y=0.9, color=theme_palette[4], linestyle=':', alpha=0.7, linewidth=1.5, label='90% Correlation')
-    ax1.axhline(y=0.8, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='80% Correlation')
-    ax1.axhline(y=0.5, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='50% Correlation')
-    
-    ax1.set_title('30-Day Rolling Correlation: Cryptocurrencies vs S&P 500')
-    ax1.set_xlabel('Date')
-    ax1.set_ylabel('Correlation Coefficient')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    ax1.set_ylim(-1, 1)
-    
-    # Format x-axis dates
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
-    
-    # Plot 2: Correlation distribution
-    ax2 = axes[1]
-    valid_btc = corr_btc.dropna()
-    valid_eth = corr_eth.dropna()
-    
-    ax2.hist(valid_btc, bins=30, alpha=0.7, label='BTC vs S&P 500', color=muted_blues[0], density=True)
-    ax2.hist(valid_eth, bins=30, alpha=0.7, label='ETH vs S&P 500', color=muted_blues[2], density=True)
-    ax2.axvline(x=0.9, color=theme_palette[4], linestyle=':', alpha=0.7, linewidth=1.5, label='90% Correlation')
-    ax2.axvline(x=0.8, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='80% Correlation')
-    
-    ax2.set_title('Distribution of 30-Day Correlations')
-    ax2.set_xlabel('Correlation Coefficient')
-    ax2.set_ylabel('Density')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # Plot 3: Returns scatter plot (recent data)
-    ax3 = axes[2]
-    recent_returns = returns_df.tail(100)  # Last 100 days
-    
-    ax3.scatter(recent_returns['SPY'], recent_returns['BTC'], alpha=0.6, color=muted_blues[0], s=20, label='BTC')
-    ax3.scatter(recent_returns['SPY'], recent_returns['ETH'], alpha=0.6, color=muted_blues[2], s=20, label='ETH')
-    
-    # Add trend lines
-    z_btc = np.polyfit(recent_returns['SPY'], recent_returns['BTC'], 1)
-    z_eth = np.polyfit(recent_returns['SPY'], recent_returns['ETH'], 1)
-    p_btc = np.poly1d(z_btc)
-    p_eth = np.poly1d(z_eth)
-    
-    x_range = np.linspace(recent_returns['SPY'].min(), recent_returns['SPY'].max(), 100)
-    ax3.plot(x_range, p_btc(x_range), color=muted_blues[0], linewidth=2, alpha=0.8)
-    ax3.plot(x_range, p_eth(x_range), color=muted_blues[2], linewidth=2, alpha=0.8)
-    
-    ax3.set_title('Recent Returns Scatter Plot (Last 100 Days)')
-    ax3.set_xlabel('S&P 500 Returns')
-    ax3.set_ylabel('Crypto Returns')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    # Plot 4: Rolling correlation by different window sizes
-    ax4 = axes[3]
-    windows = [15, 30, 60, 90, 120]
-    colors = [muted_blues[i] for i in range(len(windows))]
-    
-    for i, window in enumerate(windows):
-        corr = returns_df['BTC'].rolling(window=window, center=False, min_periods=window//2).corr(returns_df['SPY'])
-        ax4.plot(corr.index, corr, label=f'{window}-day', linewidth=1.5, color=colors[i], alpha=0.8)
-    
-    ax4.axhline(y=0.9, color=theme_palette[4], linestyle=':', alpha=0.7, linewidth=1.5, label='90% Correlation')
-    ax4.set_title('BTC vs S&P 500: Rolling Correlation by Window Size')
-    ax4.set_xlabel('Date')
-    ax4.set_ylabel('Correlation Coefficient')
-    ax4.legend()
-    ax4.grid(True, alpha=0.3)
-    ax4.set_ylim(-1, 1)
-    
-    # Format x-axis dates
-    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    ax4.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    plt.setp(ax4.xaxis.get_majorticklabels(), rotation=45, ha='right')
-    
-    # Add logo overlays
-    for ax in axes:
-        add_logo_overlay(ax)
-    
-    plt.tight_layout()
-    plt.show()
-
 def main():
-    """Main function to perform detailed correlation analysis"""
+    """Main function to perform correlation analysis"""
     # Get API key from environment
     api_key = os.getenv('POLYGON_API_KEY')
     if not api_key:
         print("Error: POLYGON_API_KEY environment variable not set")
         return
     
-    # Calculate date range (2 years from today)
-    end_date = datetime.now().strftime('%Y-%m-%d')
-    start_date = (datetime.now() - timedelta(days=2*365)).strftime('%Y-%m-%d')
+    # Download data
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=600)  # Download 600 days of data
     
-    print(f"Fetching data from {start_date} to {end_date}")
+    print(f"Fetching data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
-    # Fetch data for each asset
-    assets = {
-        'BTC': 'Bitcoin',
-        'ETH': 'Ethereum', 
-        'SPY': 'S&P 500 ETF'
-    }
+    # Get Bitcoin, Ethereum, and SPY data
+    btc_data = fetch_polygon_data('BTC', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), api_key)
+    eth_data = fetch_polygon_data('ETH', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), api_key)
+    spy_data = fetch_polygon_data('SPY', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), api_key)
     
-    data_frames = {}
+    if btc_data is None or eth_data is None or spy_data is None:
+        print("Failed to fetch data. Exiting.")
+        return
     
-    for symbol in assets.keys():
-        df = fetch_polygon_data(symbol, start_date, end_date, api_key)
-        if df is not None:
-            data_frames[symbol] = df
-        else:
-            print(f"Failed to fetch data for {symbol}. Exiting.")
-            return
+    # Debug: Print raw data info
+    print(f"\n=== Raw Data Info ===")
+    print(f"BTC data shape: {btc_data.shape}")
+    print(f"BTC date range: {btc_data.index.min()} to {btc_data.index.max()}")
+    print(f"BTC first 5 rows:")
+    print(btc_data.head())
     
-    # Create combined dataset using crypto daily data
-    btc_dates = data_frames['BTC'].index
-    combined_df = pd.DataFrame(index=btc_dates)
+    print(f"\nETH data shape: {eth_data.shape}")
+    print(f"ETH date range: {eth_data.index.min()} to {eth_data.index.max()}")
     
-    # Add crypto data
-    combined_df['BTC'] = data_frames['BTC']['close']
-    combined_df['ETH'] = data_frames['ETH']['close']
+    print(f"\nSPY data shape: {spy_data.shape}")
+    print(f"SPY date range: {spy_data.index.min()} to {spy_data.index.max()}")
+    print(f"SPY first 5 rows:")
+    print(spy_data.head())
     
-    # Add SPY data, forward-filling to get the most recent trading day price
-    spy_series = data_frames['SPY']['close']
-    combined_df['SPY'] = spy_series.reindex(btc_dates, method='ffill')
+    # Normalize timestamps to midnight to handle time component differences
+    print(f"\n=== Normalizing Timestamps ===")
     
-    # Drop any rows with NaN values
-    combined_df = combined_df.dropna()
+    # Convert all dates to date-only (remove time component)
+    btc_data.index = btc_data.index.normalize()
+    eth_data.index = eth_data.index.normalize()
+    spy_data.index = spy_data.index.normalize()
     
-    # Check for weekend effect and create SPY-only dataset
-    spy_dates = data_frames['SPY'].index
-    spy_only_df = pd.DataFrame(index=spy_dates)
-    spy_only_df['SPY'] = data_frames['SPY']['close']
-    spy_only_df['BTC'] = data_frames['BTC']['close'].reindex(spy_dates, method='ffill')
-    spy_only_df['ETH'] = data_frames['ETH']['close'].reindex(spy_dates, method='ffill')
-    spy_only_df = spy_only_df.dropna()
+    print(f"After normalization:")
+    print(f"BTC first 5 dates: {btc_data.index[:5]}")
+    print(f"SPY first 5 dates: {spy_data.index[:5]}")
     
-    # Check weekend effect
-    spy_returns = combined_df['SPY'].pct_change(fill_method=None)
-    zero_spy_days = (spy_returns == 0).sum()
-    total_days = len(spy_returns.dropna())
-    print(f"\nWeekend effect check:")
-    print(f"  Days with zero SPY returns: {zero_spy_days} out of {total_days} ({100*zero_spy_days/total_days:.1f}%)")
+    # Find the common date range (now using normalized dates)
+    common_start = max(btc_data.index.min(), eth_data.index.min(), spy_data.index.min())
+    common_end = min(btc_data.index.max(), eth_data.index.max(), spy_data.index.max())
     
-    spy_only_returns = spy_only_df.pct_change(fill_method=None).dropna()
-    zero_spy_only_days = (spy_only_returns['SPY'] == 0).sum()
-    print(f"  Days with zero SPY returns (SPY-only): {zero_spy_only_days} out of {len(spy_only_returns)} ({100*zero_spy_only_days/len(spy_only_returns):.1f}%)")
+    print(f"\n=== Common Date Range (Normalized) ===")
+    print(f"Common start: {common_start}")
+    print(f"Common end: {common_end}")
     
-    print(f"\nCombined data shape: {combined_df.shape}")
-    print(f"Date range: {combined_df.index.min()} to {combined_df.index.max()}")
+    # Filter all datasets to common date range
+    btc_filtered = btc_data[common_start:common_end]
+    eth_filtered = eth_data[common_start:common_end]
+    spy_filtered = spy_data[common_start:common_end]
+    
+    print(f"\n=== Filtered Data Info ===")
+    print(f"BTC filtered shape: {btc_filtered.shape}")
+    print(f"ETH filtered shape: {eth_filtered.shape}")
+    print(f"SPY filtered shape: {spy_filtered.shape}")
+    
+    # Create a DataFrame with all assets (simple alignment)
+    df = pd.DataFrame(index=btc_filtered.index)
+    df['BTC'] = btc_filtered['close']
+    df['ETH'] = eth_filtered['close']
+    df['SPY'] = spy_filtered['close']
+    
+    # Forward fill any missing values (handles trading calendar differences)
+    df = df.ffill().dropna()
+    
+    print(f"\n=== Final Combined Data ===")
+    print(f"Combined data shape: {df.shape}")
+    print(f"Date range: {df.index.min()} to {df.index.max()}")
+    print(f"First 5 rows:")
+    print(df.head())
+    print(f"Last 5 rows:")
+    print(df.tail())
+    
+    if df.shape[0] == 0:
+        print("Error: No data after alignment. Exiting.")
+        return
     
     # Calculate returns
-    returns_df = combined_df.pct_change(fill_method=None).dropna()
-    print(f"Returns data shape: {returns_df.shape}")
+    returns = df.pct_change(fill_method=None).dropna()
+    print(f"\nReturns data shape: {returns.shape}")
     
-    # Use SPY-only returns for correlation analysis (avoids weekend effect)
-    print(f"\nUsing SPY-only returns for correlation analysis...")
-    print(f"SPY-only returns shape: {spy_only_returns.shape}")
+    # Create windows for correlation calculation
+    windows = range(14, 181, 14)  # From 14 to 180 days, step 14
     
-    # Calculate detailed 30-day correlations using SPY-only data
-    corr_btc = calculate_rolling_correlation_detailed(spy_only_returns, 'BTC', 'SPY', window=30)
-    corr_eth = calculate_rolling_correlation_detailed(spy_only_returns, 'ETH', 'SPY', window=30)
+    # Calculate rolling correlations for each window using full dataset
+    btc_corr_matrix = np.zeros((len(windows), len(returns)))
+    eth_corr_matrix = np.zeros((len(windows), len(returns)))
+    eth_spy_corr_matrix = np.zeros((len(windows), len(returns)))
     
-    # Create comprehensive plots
-    print("\nCreating correlation analysis plots...")
-    plot_correlation_analysis(spy_only_returns, corr_btc, corr_eth)
+    for i, window in enumerate(windows):
+        btc_corr_matrix[i] = returns['BTC'].rolling(window).corr(returns['SPY'])
+        eth_corr_matrix[i] = returns['ETH'].rolling(window).corr(returns['BTC']) # Changed to BTC
+        eth_spy_corr_matrix[i] = returns['ETH'].rolling(window).corr(returns['SPY'])
     
-    # Additional analysis: Check if using different data sources would help
-    print("\n=== Additional Analysis ===")
-    print("Comparing different data alignment approaches:")
+    # Select only the last 360 days for plotting
+    plot_start_date = end_date - timedelta(days=360)
+    plot_mask = returns.index >= plot_start_date
+    btc_corr_matrix = btc_corr_matrix[:, plot_mask]
+    eth_corr_matrix = eth_corr_matrix[:, plot_mask]
+    eth_spy_corr_matrix = eth_spy_corr_matrix[:, plot_mask]
+    dates = returns.index[plot_mask]
     
-    # Approach 1: Current approach (crypto daily, SPY forward-filled)
-    print("\nApproach 1: Crypto daily, SPY forward-filled")
-    corr1_btc = returns_df['BTC'].rolling(window=30, center=False, min_periods=15).corr(returns_df['SPY'])
-    print(f"BTC max correlation: {corr1_btc.max():.4f}")
-    print(f"BTC correlations > 90%: {(corr1_btc > 0.9).sum()}")
+    print(f"\n=== Plotting Data ===")
+    print(f"Plot data shape: {btc_corr_matrix.shape}")
+    print(f"Number of dates for plotting: {len(dates)}")
     
-    # Approach 2: Use only SPY trading days (recommended)
-    print("\nApproach 2: SPY trading days only (recommended)")
-    corr2_btc = spy_only_returns['BTC'].rolling(window=30, center=False, min_periods=15).corr(spy_only_returns['SPY'])
-    print(f"BTC max correlation: {corr2_btc.max():.4f}")
-    print(f"BTC correlations > 90%: {(corr2_btc > 0.9).sum()}")
+    if len(dates) == 0:
+        print("Error: No dates for plotting. Exiting.")
+        return
     
-    # Approach 3: Use log returns with SPY-only data
-    print("\nApproach 3: Log returns (SPY-only)")
-    log_returns_df = np.log(spy_only_df / spy_only_df.shift(1)).dropna()
-    corr3_btc = log_returns_df['BTC'].rolling(window=30, center=False, min_periods=15).corr(log_returns_df['SPY'])
-    print(f"BTC max correlation: {corr3_btc.max():.4f}")
-    print(f"BTC correlations > 90%: {(corr3_btc > 0.9).sum()}")
+    # Convert dates to numeric values for plotting
+    date_nums = np.array([d.toordinal() for d in dates])
     
-    print("\nCorrelation analysis completed!")
+    # Define indices for axis formatting
+    n_dates = min(5, len(dates))
+    if n_dates > 1:
+        step = max(1, len(dates) // (n_dates - 1))
+        selected_indices = list(range(0, len(dates), step))
+        if len(selected_indices) < n_dates:
+            selected_indices.append(len(dates) - 1)
+    else:
+        selected_indices = [0]
+    
+    n_windows = min(5, len(windows))
+    if n_windows > 1:
+        window_step = max(1, len(windows) // (n_windows - 1))
+        selected_windows = list(range(0, len(windows), window_step))
+        if len(selected_windows) < n_windows:
+            selected_windows.append(len(windows) - 1)
+    else:
+        selected_windows = [0]
+    
+    # Create second figure with combined heatmap
+    fig2, (ax2, ax3, ax4) = plt.subplots(1, 3, figsize=(18, 5))
+    
+    # First subplot - Bitcoin correlation heatmap
+    im2 = ax2.imshow(btc_corr_matrix, cmap='Pastel1', aspect='auto', 
+                      extent=[date_nums[0], date_nums[-1], windows[0], windows[-1]], 
+                      origin='lower')
+    
+    ax2.set_xlabel('Date')
+    ax2.set_ylabel('Window Size (days)')
+    ax2.set_title('Bitcoin-SPY Correlation')
+    
+    # Format axes for Bitcoin plot
+    ax2.set_xticks([date_nums[i] for i in selected_indices])
+    ax2.set_xticklabels([dates[i].strftime('%m-%d') for i in selected_indices], rotation=45)
+    ax2.set_yticks([windows[i] for i in selected_windows])
+    
+    # Add colorbar for Bitcoin
+    cbar2 = fig2.colorbar(im2, ax=ax2, shrink=0.8)
+    cbar2.set_label('Correlation')
+    
+    # Second subplot - Ethereum-SPY correlation heatmap
+    im3 = ax3.imshow(eth_spy_corr_matrix, cmap='Pastel1', aspect='auto', 
+                      extent=[date_nums[0], date_nums[-1], windows[0], windows[-1]], 
+                      origin='lower')
+    
+    ax3.set_xlabel('Date')
+    ax3.set_ylabel('Window Size (days)')
+    ax3.set_title('Ethereum-SPY Correlation')
+    
+    # Format axes for Ethereum-SPY plot
+    ax3.set_xticks([date_nums[i] for i in selected_indices])
+    ax3.set_xticklabels([dates[i].strftime('%m-%d') for i in selected_indices], rotation=45)
+    ax3.set_yticks([windows[i] for i in selected_windows])
+    
+    # Add colorbar for Ethereum-SPY
+    cbar3 = fig2.colorbar(im3, ax=ax3, shrink=0.8)
+    cbar3.set_label('Correlation')
+    
+    # Third subplot - Ethereum-Bitcoin correlation heatmap
+    im4 = ax4.imshow(eth_corr_matrix, cmap='Pastel1', aspect='auto', 
+                      extent=[date_nums[0], date_nums[-1], windows[0], windows[-1]], 
+                      origin='lower')
+    
+    ax4.set_xlabel('Date')
+    ax4.set_ylabel('Window Size (days)')
+    ax4.set_title('Ethereum-Bitcoin Correlation')
+    
+    # Format axes for Ethereum-Bitcoin plot
+    ax4.set_xticks([date_nums[i] for i in selected_indices])
+    ax4.set_xticklabels([dates[i].strftime('%m-%d') for i in selected_indices], rotation=45)
+    ax4.set_yticks([windows[i] for i in selected_windows])
+    
+    # Add colorbar for Ethereum-Bitcoin
+    cbar4 = fig2.colorbar(im4, ax=ax4, shrink=0.8)
+    cbar4.set_label('Correlation')
+    
+    # Add logo overlays to heatmap figure
+    add_logo_overlay(ax2)
+    add_logo_overlay(ax3)
+    add_logo_overlay(ax4)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Create third figure with line plots for specific window sizes
+    fig3, (ax5, ax6, ax7) = plt.subplots(3, 1, figsize=(12, 10))
+    
+    # First subplot - BTC-SPY betas
+    # Calculate 30-day and 90-day betas
+    btc_spy_30d = returns['BTC'].rolling(window=30).cov(returns['SPY']) / returns['SPY'].rolling(window=30).var()
+    btc_spy_90d = returns['BTC'].rolling(window=90).cov(returns['SPY']) / returns['SPY'].rolling(window=90).var()
+    
+    ax5.plot(btc_spy_30d.index, btc_spy_30d, label='30-day', linewidth=2, color=muted_blues[0], alpha=0.2)
+    ax5.plot(btc_spy_90d.index, btc_spy_90d, label='90-day', linewidth=2, color=muted_blues[2])
+    ax5.axhline(y=0, color=theme_palette[3], linestyle='--', alpha=0.7, linewidth=1)
+    ax5.axhline(y=1, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='Beta = 1')
+    
+    ax5.set_title('Bitcoin-SPY Beta')
+    ax5.set_xlabel('Date')
+    ax5.set_ylabel('Beta Coefficient')
+    ax5.legend()
+    ax5.grid(True, alpha=0.3)
+
+    
+    # Second subplot - ETH-SPY betas
+    eth_spy_30d = returns['ETH'].rolling(window=30).cov(returns['SPY']) / returns['SPY'].rolling(window=30).var()
+    eth_spy_90d = returns['ETH'].rolling(window=90).cov(returns['SPY']) / returns['SPY'].rolling(window=90).var()
+    
+    ax6.plot(eth_spy_30d.index, eth_spy_30d, label='30-day', linewidth=2, color=muted_blues[0], alpha=0.2)
+    ax6.plot(eth_spy_90d.index, eth_spy_90d, label='90-day', linewidth=2, color=muted_blues[2])
+    ax6.axhline(y=0, color=theme_palette[3], linestyle='--', alpha=0.7, linewidth=1)
+    ax6.axhline(y=1, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='Beta = 1')
+    
+    ax6.set_title('Ethereum-SPY Beta')
+    ax6.set_xlabel('Date')
+    ax6.set_ylabel('Beta Coefficient')
+    ax6.legend()
+    ax6.grid(True, alpha=0.3)
+    
+    # Third subplot - ETH-BTC betas
+    eth_btc_30d = returns['ETH'].rolling(window=30).cov(returns['BTC']) / returns['BTC'].rolling(window=30).var()
+    eth_btc_90d = returns['ETH'].rolling(window=90).cov(returns['BTC']) / returns['BTC'].rolling(window=90).var()
+    
+    ax7.plot(eth_btc_30d.index, eth_btc_30d, label='30-day', linewidth=2, color=muted_blues[0], alpha=0.2)
+    ax7.plot(eth_btc_90d.index, eth_btc_90d, label='90-day', linewidth=2, color=muted_blues[2])
+    ax7.axhline(y=0, color=theme_palette[3], linestyle='--', alpha=0.7, linewidth=1)
+    ax7.axhline(y=1, color=theme_palette[2], linestyle=':', alpha=0.5, linewidth=1, label='Beta = 1')
+    
+    ax7.set_title('Ethereum-Bitcoin Beta')
+    ax7.set_xlabel('Date')
+    ax7.set_ylabel('Beta Coefficient')
+    ax7.legend()
+    ax7.grid(True, alpha=0.3)
+    
+    # Format x-axis dates for all subplots
+    for ax in [ax5, ax6, ax7]:
+        ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+        ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=2))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
+    # Add logo overlays to line plot figure
+    add_logo_overlay(ax5)
+    add_logo_overlay(ax6)
+    add_logo_overlay(ax7)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print("Correlation analysis completed!")
 
 if __name__ == "__main__":
     main()
