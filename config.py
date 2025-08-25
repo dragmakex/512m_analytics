@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 API_ENDPOINTS = {
     'defi_llama_yields': "https://yields.llama.fi/pools",
     'defi_llama_chart': "https://yields.llama.fi/chart/",
-    'polygon_base': "https://api.polygon.io"
+    'polygon_base': "https://api.polygon.io",
+    'coingecko_base': "https://api.coingecko.com/api/v3"
 }
 
 # Database Configuration
