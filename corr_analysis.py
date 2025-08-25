@@ -78,7 +78,7 @@ def fetch_polygon_data(symbol: str, start_date: str, end_date: str, api_key: str
         return None
 
 
-def fetch_all_market_data(days: int = 600) -> Dict[str, pd.DataFrame]:
+def fetch_all_market_data(days: int = 730) -> Dict[str, pd.DataFrame]:
     """
     Fetch market data for all required symbols.
     
@@ -148,10 +148,12 @@ def prepare_combined_dataset(data: Dict[str, pd.DataFrame]) -> Optional[pd.DataF
         filtered_df = df[common_start:common_end]
         combined_df[symbol] = filtered_df['close']
     
-    # Forward fill any missing values
-    combined_df = combined_df.ffill().dropna()
+    # Remove any rows with missing values (non-trading days) instead of forward-filling
+    # This ensures we only work with common trading days across all assets
+    combined_df = combined_df.dropna()
     
     print_data_summary(combined_df, "Combined Dataset")
+    print(f"Note: Removed {len(combined_df.index) - len(combined_df.dropna().index)} non-trading days")
     return combined_df
 
 
@@ -297,26 +299,31 @@ def create_beta_line_plots(returns: pd.DataFrame) -> None:
     # Calculate beta series with improved error handling
     spy_var_30d = returns['SPY'].rolling(window=30).var()
     spy_var_90d = returns['SPY'].rolling(window=90).var()
+    spy_var_180d = returns['SPY'].rolling(window=180).var()
     btc_var_30d = returns['BTC'].rolling(window=30).var()
     btc_var_90d = returns['BTC'].rolling(window=90).var()
+    btc_var_180d = returns['BTC'].rolling(window=180).var()
     
     # BTC-SPY betas
     btc_spy_30d = returns['BTC'].rolling(window=30).cov(returns['SPY']) / spy_var_30d.where(spy_var_30d > 1e-10, np.nan)
     btc_spy_90d = returns['BTC'].rolling(window=90).cov(returns['SPY']) / spy_var_90d.where(spy_var_90d > 1e-10, np.nan)
+    btc_spy_180d = returns['BTC'].rolling(window=180).cov(returns['SPY']) / spy_var_180d.where(spy_var_180d > 1e-10, np.nan)
     
-    _plot_beta_series(ax1, btc_spy_30d, btc_spy_90d, 'Bitcoin-SPY Beta')
+    _plot_beta_series(ax1, btc_spy_30d, btc_spy_90d, btc_spy_180d, 'Bitcoin-SPY Beta')
     
     # ETH-SPY betas
     eth_spy_30d = returns['ETH'].rolling(window=30).cov(returns['SPY']) / spy_var_30d.where(spy_var_30d > 1e-10, np.nan)
     eth_spy_90d = returns['ETH'].rolling(window=90).cov(returns['SPY']) / spy_var_90d.where(spy_var_90d > 1e-10, np.nan)
+    eth_spy_180d = returns['ETH'].rolling(window=180).cov(returns['SPY']) / spy_var_180d.where(spy_var_180d > 1e-10, np.nan)
     
-    _plot_beta_series(ax2, eth_spy_30d, eth_spy_90d, 'Ethereum-SPY Beta')
+    _plot_beta_series(ax2, eth_spy_30d, eth_spy_90d, eth_spy_180d, 'Ethereum-SPY Beta')
     
     # ETH-BTC betas
     eth_btc_30d = returns['ETH'].rolling(window=30).cov(returns['BTC']) / btc_var_30d.where(btc_var_30d > 1e-10, np.nan)
     eth_btc_90d = returns['ETH'].rolling(window=90).cov(returns['BTC']) / btc_var_90d.where(btc_var_90d > 1e-10, np.nan)
+    eth_btc_180d = returns['ETH'].rolling(window=180).cov(returns['BTC']) / btc_var_180d.where(btc_var_180d > 1e-10, np.nan)
     
-    _plot_beta_series(ax3, eth_btc_30d, eth_btc_90d, 'Ethereum-Bitcoin Beta')
+    _plot_beta_series(ax3, eth_btc_30d, eth_btc_90d, eth_btc_180d, 'Ethereum-Bitcoin Beta')
     
     # Format x-axis dates for all subplots
     for ax in [ax1, ax2, ax3]:
@@ -329,10 +336,11 @@ def create_beta_line_plots(returns: pd.DataFrame) -> None:
     plt.show()
 
 
-def _plot_beta_series(ax: plt.Axes, beta_30d: pd.Series, beta_90d: pd.Series, title: str) -> None:
+def _plot_beta_series(ax: plt.Axes, beta_30d: pd.Series, beta_90d: pd.Series, beta_180d: pd.Series, title: str) -> None:
     """Plot beta series for a specific asset pair."""
     ax.plot(beta_30d.index, beta_30d, label='30-day', linewidth=2, color=MUTED_BLUES[0], alpha=0.2)
-    ax.plot(beta_90d.index, beta_90d, label='90-day', linewidth=2, color=MUTED_BLUES[2])
+    ax.plot(beta_90d.index, beta_90d, label='90-day', linewidth=2, color=MUTED_BLUES[2], alpha=0.6)
+    ax.plot(beta_180d.index, beta_180d, label='180-day', linewidth=2, color=MUTED_BLUES[1])
     ax.axhline(y=0, color=THEME_PALETTE[3], linestyle='--', alpha=0.7, linewidth=1)
     ax.axhline(y=1, color=THEME_PALETTE[2], linestyle=':', alpha=0.5, linewidth=1, label='Beta = 1')
     
@@ -350,7 +358,7 @@ def main() -> None:
     try:
         # Fetch all market data
         print("=== Market Correlation Analysis ===")
-        data = fetch_all_market_data(days=600)
+        data = fetch_all_market_data(days=730)
         
         if not data:
             print("Failed to fetch market data. Exiting.")

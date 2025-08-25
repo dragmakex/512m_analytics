@@ -45,7 +45,7 @@ def add_logo_overlay(ax: plt.Axes, logo_path: str = DEFAULT_LOGO_PATH,
         
         # Calculate appropriate size for the logo (about 30% of plot width)
         plot_width = ax.get_xlim()[1] - ax.get_xlim()[0]
-        logo_width = plot_width * 0.3
+        logo_width = plot_width * 0.25
         
         # Create offset image
         im = OffsetImage(logo_array, zoom=logo_width/logo_img.width, alpha=alpha)
