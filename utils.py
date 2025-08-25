@@ -20,7 +20,7 @@ from PIL import Image
 
 from config import (
     API_ENDPOINTS, DEFAULT_DB_FILENAME, DEFAULT_LOGO_PATH, DEFAULT_LOGO_ALPHA,
-    RATE_LIMIT_DELAY, RATE_LIMIT_RETRY_DELAY, THEME_PALETTE
+    RATE_LIMIT_DELAY, RATE_LIMIT_RETRY_DELAY, COINGECKO_FREE_TIER_DELAY, THEME_PALETTE
 )
 
 
@@ -375,26 +375,52 @@ def purge_database(db_filename: str = DEFAULT_DB_FILENAME) -> None:
         print(f"Warning: Could not purge database: {e}")
 
 
-def safe_api_request(url: str, max_retries: int = 3) -> Optional[requests.Response]:
+def safe_api_request(url: str, max_retries: int = 3, is_coingecko: bool = False, api_key: str = None, params: dict = None) -> Optional[requests.Response]:
     """
     Make API request with rate limiting and retry logic.
     
     Args:
         url: API endpoint URL
         max_retries: Maximum number of retry attempts
+        is_coingecko: Whether this is a CoinGecko API call (requires special handling)
+        api_key: CoinGecko Pro API key if available
+        params: Query parameters for the request
         
     Returns:
         Response object or None if failed
     """
     for attempt in range(max_retries):
         try:
-            response = requests.get(url)
+            # Add extra delay for CoinGecko free tier only
+            if is_coingecko and attempt > 0:
+                extra_delay = 3 * attempt  # Progressive delay: 3s, 6s, 9s
+                print(f"CoinGecko free tier delay: waiting {extra_delay} seconds...")
+                time.sleep(extra_delay)
+            
+            # Prepare headers for Pro API if key is available
+            headers = {}
+            if api_key:
+                headers['x-cg-pro-api-key'] = api_key  # CoinGecko expects lowercase header
+                print(f"Making Pro API request with headers: {headers}")
+            else:
+                print(f"Making free tier request (no API key)")
+            
+            response = requests.get(url, headers=headers, params=params)
+            
+            # Debug response
+            print(f"Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"Response text: {response.text[:200]}...")
             
             if response.status_code == 429:  # Rate limited
-                wait_time = RATE_LIMIT_RETRY_DELAY * (attempt + 1)
+                wait_time = RATE_LIMIT_RETRY_DELAY * (2 ** attempt)  # Exponential backoff
                 print(f"Rate limited, waiting {wait_time} seconds... (attempt {attempt + 1})")
                 time.sleep(wait_time)
                 continue
+            
+            # For CoinGecko free tier, add mandatory delay between requests
+            if is_coingecko:
+                time.sleep(COINGECKO_FREE_TIER_DELAY)
             
             return response
             

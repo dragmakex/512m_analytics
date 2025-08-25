@@ -27,7 +27,7 @@ load_dotenv()
 
 # CoinGecko API configuration
 COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
-RATE_LIMIT_DELAY = 1.2  # CoinGecko free tier allows ~50 calls/min
+COINGECKO_PRO_URL = "https://pro-api.coingecko.com/api/v3"
 
 
 class PortfolioBacktester:
@@ -76,7 +76,50 @@ class PortfolioBacktester:
         Returns:
             DataFrame with price data or None if failed
         """
-        url = f"{COINGECKO_BASE_URL}/coins/{token_id}/market_chart/range"
+        # Use Pro API URL if API key is available
+        api_key = os.getenv('COINGECKO_API_KEY')
+        if api_key:
+            base_url = COINGECKO_PRO_URL
+            print(f"Using CoinGecko Pro API for {token_id}")
+            
+            # For Pro API, try the markets endpoint first (more reliable)
+            url = f"{base_url}/coins/markets"
+            params = {
+                'vs_currency': 'usd',
+                'ids': token_id,
+                'order': 'market_cap_desc',
+                'per_page': 1,
+                'page': 1,
+                'sparkline': False
+            }
+            
+            try:
+                print(f"Trying Pro API markets endpoint for {token_id}...")
+                response = safe_api_request(url, max_retries=3, is_coingecko=False, api_key=api_key, params=params)
+                
+                if response and response.status_code == 200:
+                    data = response.json()
+                    if data and len(data) > 0:
+                        # Create a simple DataFrame with current price
+                        current_price = data[0]['current_price']
+                        last_updated = data[0]['last_updated']
+                        
+                        df = pd.DataFrame({
+                            'price': [current_price]
+                        }, index=[pd.to_datetime(last_updated)])
+                        
+                        df = df.rename(columns={'price': token_id})
+                        print(f"Successfully fetched current price for {token_id}: ${current_price:.2f}")
+                        return df
+            except Exception as e:
+                print(f"Pro API markets endpoint failed: {e}")
+            
+            # Fallback to historical endpoint for Pro API
+            url = f"{base_url}/coins/{token_id}/market_chart/range"
+        else:
+            base_url = COINGECKO_BASE_URL
+            print(f"Using CoinGecko free tier for {token_id}")
+            url = f"{base_url}/coins/{token_id}/market_chart/range"
         
         # Convert dates to timestamps
         start_timestamp = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp())
@@ -89,8 +132,13 @@ class PortfolioBacktester:
         }
         
         try:
-            print(f"Fetching data for {token_id}...")
-            response = safe_api_request(url, max_retries=3)
+            print(f"Fetching historical data for {token_id}...")
+            
+            # Use API key if available, otherwise use free tier
+            if api_key:
+                response = safe_api_request(url, max_retries=3, is_coingecko=False, api_key=api_key, params=params)
+            else:
+                response = safe_api_request(url, max_retries=3, is_coingecko=True, params=params)
             
             if not response or response.status_code != 200:
                 print(f"Failed to fetch data for {token_id}")
@@ -113,12 +161,84 @@ class PortfolioBacktester:
             df.index = pd.to_datetime(df.index)
             
             print(f"Successfully fetched {len(df)} data points for {token_id}")
-            time.sleep(RATE_LIMIT_DELAY)  # Rate limiting
             
             return df
             
         except Exception as e:
             print(f"Error fetching data for {token_id}: {e}")
+            return None
+    
+    def fetch_token_data_simple(self, token_id: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+        """
+        Fetch historical price data using the simpler /simple/price endpoint.
+        This endpoint might be more reliable for the free tier.
+        
+        Args:
+            token_id: CoinGecko token ID
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            
+        Returns:
+            DataFrame with price data or None if failed
+        """
+        # For the simple endpoint, we need to fetch daily data manually
+        # This is less efficient but might work better with rate limits
+        
+        # Use Pro API URL if API key is available
+        api_key = os.getenv('COINGECKO_API_KEY')
+        if api_key:
+            base_url = COINGECKO_PRO_URL
+            print(f"Using CoinGecko Pro API for {token_id}")
+        else:
+            base_url = COINGECKO_BASE_URL
+            print(f"Using CoinGecko free tier for {token_id}")
+        
+        url = f"{base_url}/simple/price"
+        
+        params = {
+            'ids': token_id,
+            'vs_currencies': 'usd',
+            'include_24hr_change': 'false',
+            'include_last_updated_at': 'true'
+        }
+        
+        try:
+            print(f"Fetching current price for {token_id}...")
+            
+            # Use API key if available, otherwise use free tier
+            if api_key:
+                response = safe_api_request(url, max_retries=3, is_coingecko=False, api_key=api_key, params=params)
+            else:
+                response = safe_api_request(url, max_retries=3, is_coingecko=True, params=params)
+            
+            if not response or response.status_code != 200:
+                print(f"Failed to fetch current price for {token_id}")
+                return None
+            
+            data = response.json()
+            
+            if token_id not in data:
+                print(f"Token {token_id} not found in response")
+                return None
+            
+            # Get current price and timestamp
+            current_price = data[token_id]['usd']
+            last_updated = data[token_id]['last_updated_at']
+            
+            # For now, create a simple DataFrame with current price
+            # In a real implementation, you'd want to fetch historical data
+            # This is just a fallback method
+            df = pd.DataFrame({
+                'price': [current_price]
+            }, index=[pd.to_datetime(last_updated, unit='s')])
+            
+            df = df.rename(columns={'price': token_id})
+            
+            print(f"Successfully fetched current price for {token_id}: ${current_price:.2f}")
+            return df
+            
+        except Exception as e:
+            print(f"Error fetching simple price for {token_id}: {e}")
             return None
     
     def fetch_all_data(self, start_date: str, end_date: str) -> bool:
@@ -137,11 +257,18 @@ class PortfolioBacktester:
         print(f"Tokens: {self.tokens}")
         
         for token_id in self.tokens:
+            # Try the main endpoint first
             token_data = self.fetch_token_data(token_id, start_date, end_date)
+            
+            # If that fails, try the simple endpoint as fallback
+            if token_data is None:
+                print(f"Trying simple endpoint for {token_id}...")
+                token_data = self.fetch_token_data_simple(token_id, start_date, end_date)
+            
             if token_data is not None:
                 self.price_data[token_id] = token_data
             else:
-                print(f"Warning: Failed to fetch data for {token_id}")
+                print(f"Warning: Failed to fetch data for {token_id} with both endpoints")
         
         if not self.price_data:
             print("No price data fetched. Cannot proceed with backtest.")

@@ -48,8 +48,9 @@ DEFAULT_LOGO_ALPHA = 0.05
 
 # Data Fetching Configuration
 DEFAULT_FETCH_DAYS = 700
-RATE_LIMIT_DELAY = 0.5  # seconds
-RATE_LIMIT_RETRY_DELAY = 2  # seconds
+RATE_LIMIT_DELAY = 2.0  # Increased from 0.5 to 2.0 seconds for free tier
+RATE_LIMIT_RETRY_DELAY = 5  # Increased from 2 to 5 seconds for free tier
+COINGECKO_FREE_TIER_DELAY = 1.5  # Additional delay specifically for CoinGecko free tier
 
 # Analysis Configuration
 ROLLING_WINDOW_SIZES = {

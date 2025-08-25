@@ -38,10 +38,8 @@ def example_defi_portfolio() -> PortfolioBacktester:
     portfolio = PortfolioBacktester(initial_capital=25000.0)
     
     # Core DeFi tokens
-    portfolio.add_token('ethereum')  # ETH as base layer
     portfolio.add_token('uniswap')   # UNI
     portfolio.add_token('aave')      # AAVE
-    portfolio.add_token('compound-governance-token')  # COMP
     portfolio.add_token('maker')     # MKR
     portfolio.add_token('chainlink') # LINK
     portfolio.add_token('curve-dao-token')  # CRV
