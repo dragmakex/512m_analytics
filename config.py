@@ -68,6 +68,7 @@ DISPLAY_POOL_NAMES = {
     '4': 'Morpho Spark USDC',
     '5': 'Sky DSR DAI',
     '6': 'Usual USD0++',
+    '10': 'Morpho USUALUSDC+',
     '13': 'Fluid USDC'
 }
 

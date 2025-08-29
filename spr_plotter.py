@@ -230,7 +230,7 @@ def plot_pool_contributions_over_time(df: pd.DataFrame, metadata_df: pd.DataFram
     ax.set_title('Pool Contributions to Stablecoin Prime Rate Over Time')
     ax.set_xlabel('Date')
     ax.set_ylabel('Contribution (%)')
-    ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=True, fancybox=True, shadow=True)
+    ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
     ax.grid(True)
     ax.set_ylim(0, 100)
     
@@ -304,7 +304,14 @@ def _find_top_contributing_pools(pool_contributions: Dict[str, List[float]],
             latest_contributions[pool_num] = contributions[latest_idx]
     
     # Sort by latest contribution and get top N
-    return sorted(latest_contributions.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    top_pools = sorted(latest_contributions.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    
+    # Print the pool_ids of top contributors
+    print(f"\nTop {top_n} contributing pools (by pool_id):")
+    for i, (pool_num, contribution) in enumerate(top_pools, 1):
+        print(f"  {i}. Pool_{pool_num}: {contribution:.2f}%")
+    
+    return top_pools
 
 
 def _prepare_stack_data(pool_contributions: Dict[str, List[float]], 
