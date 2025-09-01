@@ -59,7 +59,6 @@ def fetch_top_stablecoin_pools_by_tvl(limit: int = 100) -> List[Dict[str, Any]]:
             if zero_apy_pools_excluded > 0:
                 print(f"Excluded {zero_apy_pools_excluded} pools with 0% APY")
             
-            # Sort by TVL and get top pools
             stablecoin_pools.sort(key=lambda x: x['tvlUsd'], reverse=True)
             top_pools = stablecoin_pools[:limit]
             
@@ -89,34 +88,28 @@ def merge_and_save_pool_data(pool_data: Dict[str, Dict[str, Any]],
     print("Merging pool data...")
     merged_df = None
     
-    # Merge all pool dataframes
     for pool_id, pool_info in pool_data.items():
         df = pool_info['data']
         pool_name = pool_info['name']
         
-        # Convert index to date only
         df = df.copy()
         df.index = pd.to_datetime(df.index).date
         df.index.name = 'date'
         
-        # Select only numeric columns (apy and tvlUsd)
         numeric_cols = ['apy', 'tvlUsd']
         available_cols = [col for col in numeric_cols if col in df.columns]
         
         if len(available_cols) == 2:
             df_subset = df[available_cols].copy()
             
-            # Aggregate by mean if multiple entries per day
             if len(df_subset) != len(df_subset.groupby(df_subset.index).size()):
                 df_subset = df_subset.groupby(df_subset.index).mean()
             
-            # Rename columns to avoid conflicts
             df_subset = df_subset.rename(columns={
                 'apy': f'apy_{pool_name}',
                 'tvlUsd': f'tvlUsd_{pool_name}'
             })
             
-            # Merge with existing data
             if merged_df is None:
                 merged_df = df_subset
             else:
@@ -128,13 +121,10 @@ def merge_and_save_pool_data(pool_data: Dict[str, Dict[str, Any]],
     
     print(f"Successfully merged data for {len(pool_data)} pools")
     
-    # Clean up data by removing NaN values
     merged_df = _clean_merged_data(merged_df)
     
-    # Calculate weighted average APY
     merged_df = _calculate_weighted_metrics(merged_df)
     
-    # Save to SQLite database
     _save_to_database(merged_df, pool_data, db_filename)
     
     return merged_df
@@ -159,14 +149,12 @@ def _clean_merged_data(merged_df: pd.DataFrame) -> pd.DataFrame:
     if dropped_cols > 0:
         print(f"Dropped {dropped_cols} columns with all NaN values")
     
-    # Drop rows that are all NaN (dates with no data)
     initial_rows = len(merged_df)
     merged_df = merged_df.dropna(axis=0, how='all')
     dropped_rows = initial_rows - len(merged_df)
     if dropped_rows > 0:
         print(f"Dropped {dropped_rows} rows with all NaN values")
     
-    # Drop pools with incomplete data (either APY or TVL all NaN)
     apy_cols = [col for col in merged_df.columns if col.startswith('apy_')]
     tvl_cols = [col for col in merged_df.columns if col.startswith('tvlUsd_')]
     

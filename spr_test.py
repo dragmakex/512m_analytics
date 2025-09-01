@@ -15,7 +15,7 @@ import os
 from dotenv import load_dotenv
 
 from config import API_ENDPOINTS, setup_plotting_style
-from utils import safe_api_request, validate_dataframe, print_data_summary
+from utils import safe_api_request, validate_dataframe, print_data_summary, fetch_polygon_data
 
 # Load environment variables
 load_dotenv()
@@ -71,54 +71,6 @@ def _test_different_window_sizes(df: pd.DataFrame) -> None:
         max_corr = corr_window.max()
         high_corr_count = (corr_window > 0.9).sum()
         print(f"  {window}-day window - Max: {max_corr:.4f}, >0.9: {high_corr_count}")
-
-
-def fetch_polygon_data(symbol: str, start_date: str, end_date: str, api_key: str) -> Optional[pd.DataFrame]:
-    """
-    Fetch data from Polygon.io API for a specific symbol.
-    
-    Args:
-        symbol: Stock/crypto symbol (BTC, ETH, SPY, etc.)
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
-        api_key: Polygon API key
-        
-    Returns:
-        DataFrame with price data, or None if failed
-    """
-    base_url = API_ENDPOINTS['polygon_base']
-    
-    if symbol in ['BTC', 'ETH']:
-        url = f"{base_url}/v2/aggs/ticker/X:{symbol}USD/range/1/day/{start_date}/{end_date}"
-    else:
-        url = f"{base_url}/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}"
-    
-    params = {
-        'apiKey': api_key,
-        'adjusted': 'true',
-        'sort': 'asc'
-    }
-    
-    try:
-        print(f"Fetching {symbol}...")
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        
-        result = response.json()
-        if result.get('results'):
-            df = pd.DataFrame(result['results'])
-            df['date'] = pd.to_datetime(df['t'], unit='ms')
-            df = df[['date', 'c']].rename(columns={'c': 'close'})
-            df.set_index('date', inplace=True)
-            print(f"  {symbol}: {len(df)} data points")
-            return df
-        else:
-            print(f"  {symbol}: No data")
-            return None
-            
-    except Exception as e:
-        print(f"  {symbol}: Error - {e}")
-        return None
 
 
 def fetch_recent_data() -> Optional[Dict[str, pd.DataFrame]]:
