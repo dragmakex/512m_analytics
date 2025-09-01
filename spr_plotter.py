@@ -12,7 +12,7 @@ import matplotlib.dates as mdates
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
-import seaborn as sns
+
 
 from config import (
     DEFAULT_DB_FILENAME, THEME_PALETTE, MUTED_BLUES, DISPLAY_POOL_NAMES,
@@ -38,36 +38,31 @@ def plot_weighted_apy_trends(df: pd.DataFrame) -> None:
     setup_plotting_style()
     fig, ax = plt.subplots(figsize=(12, 6))
     
-    # Plot daily weighted APY
     ax.plot(
         df.index,
         df['weighted_apy'],
         label='Daily Weighted APY',
         alpha=0.6,
         linewidth=1.5,
-        color=THEME_PALETTE[2]  # 3rd color in palette
+        color=THEME_PALETTE[2]
     )
     
-    # Plot 14-day moving average
     ax.plot(
         df.index,
         df['ma_apy_14d'],
         label='14-Day Moving Average',
         linewidth=2.5,
-        color=THEME_PALETTE[3]  # 4th color in palette
+        color=THEME_PALETTE[3]
     )
     
-    # Customize the plot
     ax.set_title('Stablecoin Prime Rate: Daily vs 14-Day Moving Average')
     ax.set_xlabel('Date')
     ax.set_ylabel('SPR APY (%)')
     ax.legend()
     ax.grid(True)
     
-    # Format x-axis dates
     format_date_axis(ax, interval=2)
     
-    # Add logo overlay
     add_logo_overlay(ax)
     
     plt.tight_layout()

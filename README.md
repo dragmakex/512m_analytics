@@ -19,6 +19,7 @@ This project fetches data from DeFiLlama and other sources to:
 - **`spr_fetcher_v1.py`** - Main data fetcher that calculates the DeFi Prime Rate
 - **`spr_plotter.py`** - Visualization module for Prime Rate analysis
 - **`specific_pools_fetcher.py`** - Fetcher for specific pool analysis
+- **`spr_pool_identifier.py`** - Pool data extraction and identification utility
 - **`yo_corr.py`** - yoUSD correlation analysis with the Prime Rate
 - **`corr_analysis.py`** - Market correlation analysis (BTC, ETH, SPY)
 - **`spr_db_csv.py`** - Database export utilities
@@ -125,7 +126,15 @@ python spr_db_csv.py
 
 Exports specific pool data to CSV format for external analysis.
 
-### 7. Run Tests
+### 7. Pool Data Identification
+
+```bash
+python spr_pool_identifier.py
+```
+
+Extracts and displays the latest APY and TVL data for pools 0-15 from the database with summary statistics.
+
+### 8. Run Tests
 
 ```bash
 python spr_test.py

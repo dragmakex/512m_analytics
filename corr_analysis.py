@@ -11,7 +11,7 @@ import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
+
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from dotenv import load_dotenv
@@ -21,61 +21,11 @@ from config import (
 )
 from utils import (
     add_logo_overlay, safe_api_request, validate_dataframe, 
-    print_data_summary, normalize_datetime_index
+    print_data_summary, normalize_datetime_index, fetch_polygon_data
 )
 
 # Load environment variables
 load_dotenv()
-
-
-def fetch_polygon_data(symbol: str, start_date: str, end_date: str, api_key: str) -> Optional[pd.DataFrame]:
-    """
-    Fetch data from Polygon.io API for a specific symbol.
-    
-    Args:
-        symbol: Asset symbol (BTC, ETH, SPY, etc.)
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
-        api_key: Polygon API key
-        
-    Returns:
-        DataFrame with price data, or None if failed
-    """
-    base_url = API_ENDPOINTS['polygon_base']
-    
-    if symbol in ['BTC', 'ETH']:
-        url = f"{base_url}/v2/aggs/ticker/X:{symbol}USD/range/1/day/{start_date}/{end_date}"
-    else:
-        url = f"{base_url}/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}"
-    
-    params = {
-        'apiKey': api_key,
-        'adjusted': 'true',
-        'sort': 'asc'
-    }
-    
-    try:
-        print(f"Fetching data for {symbol}...")
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        if data.get('results'):
-            df = pd.DataFrame(data['results'])
-            df['date'] = pd.to_datetime(df['t'], unit='ms')
-            df = df[['date', 'c']].rename(columns={'c': 'close'})
-            df.set_index('date', inplace=True)
-            
-            print(f"Successfully fetched {len(df)} data points for {symbol}")
-            return df
-        else:
-            print(f"No data returned for {symbol}")
-            return None
-            
-    except Exception as e:
-        print(f"Error fetching data for {symbol}: {e}")
-        return None
 
 
 def fetch_all_market_data(days: int = 730) -> Dict[str, pd.DataFrame]:

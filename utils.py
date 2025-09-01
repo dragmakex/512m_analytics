@@ -35,22 +35,16 @@ def add_logo_overlay(ax: plt.Axes, logo_path: str = DEFAULT_LOGO_PATH,
         alpha: transparency level (0-1)
     """
     try:
-        # Load the logo image
         logo_img = Image.open(logo_path)
         logo_array = np.array(logo_img)
         
-        # Get the center of the plot
         x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) / 2
         y_center = (ax.get_ylim()[0] + ax.get_ylim()[1]) / 2
         
-        # Calculate appropriate size for the logo (about 30% of plot width)
         plot_width = ax.get_xlim()[1] - ax.get_xlim()[0]
         logo_width = plot_width * 0.25
         
-        # Create offset image
         im = OffsetImage(logo_array, zoom=logo_width/logo_img.width, alpha=alpha)
-        
-        # Create annotation box at center
         ab = AnnotationBbox(im, (x_center, y_center), frameon=False)
         ax.add_artist(ab)
         
@@ -78,7 +72,6 @@ def fetch_pool_chart_data(pool_id: str, pool_name: str = None,
         url = f"{API_ENDPOINTS['defi_llama_chart']}{pool_id}"
         response = requests.get(url)
         
-        # Handle rate limiting
         if response.status_code == 429:
             print(f"Rate limited for {display_name}, waiting {RATE_LIMIT_RETRY_DELAY} seconds...")
             time.sleep(RATE_LIMIT_RETRY_DELAY)
@@ -87,20 +80,17 @@ def fetch_pool_chart_data(pool_id: str, pool_name: str = None,
         if response.status_code == 200:
             data = response.json()
             
-            # Extract data array
             if isinstance(data, dict) and 'data' in data:
                 data = data['data']
             
             if isinstance(data, list) and len(data) > 0:
                 df = pd.DataFrame(data)
                 
-                # Convert timestamp to datetime
                 if 'timestamp' in df.columns:
                     df = _process_timestamp_column(df, display_name)
                     if df is None:
                         return None
                     
-                    # Filter to last N days
                     cutoff_date = datetime.now() - timedelta(days=days)
                     df = df[df.index >= cutoff_date]
                     
@@ -143,7 +133,6 @@ def _process_timestamp_column(df: pd.DataFrame, pool_name: str) -> Optional[pd.D
     
     df.set_index('date', inplace=True)
     
-    # Make index timezone-naive
     if df.index.tz is not None:
         df.index = df.index.tz_localize(None)
     
@@ -168,11 +157,9 @@ def fetch_ethereum_price_data(start_date: datetime, end_date: datetime) -> Optio
             print("Warning: POLYGON_API_KEY not found in environment variables")
             return None
         
-        # Convert dates to string format for Polygon API
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
         
-        # Polygon API endpoint for Ethereum daily prices
         url = f"{API_ENDPOINTS['polygon_base']}/v2/aggs/ticker/X:ETHUSD/range/1/day/{start_str}/{end_str}?adjusted=true&sort=asc&limit=50000&apiKey={api_key}"
         
         print(f"Fetching Ethereum price data from {start_str} to {end_str}...")
@@ -182,7 +169,6 @@ def fetch_ethereum_price_data(start_date: datetime, end_date: datetime) -> Optio
             data = response.json()
             
             if data.get('results'):
-                # Extract price data
                 price_data = []
                 for result in data['results']:
                     price_data.append({
@@ -225,13 +211,11 @@ def load_data_from_db(db_filename: str = DEFAULT_DB_FILENAME) -> Tuple[Optional[
         print(f"Loading data from {db_filename}...")
         conn = sqlite3.connect(db_filename)
         
-        # Check what tables exist
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
         print(f"Tables in database: {[table[0] for table in tables]}")
         
-        # Load main data
         try:
             merged_df = pd.read_sql('SELECT * FROM pool_data', conn, index_col='index')
         except:
@@ -252,14 +236,12 @@ def load_data_from_db(db_filename: str = DEFAULT_DB_FILENAME) -> Tuple[Optional[
                     print(f"  {col[1]} ({col[2]})")
                 return None, None
         
-        # Convert index to datetime if needed
         if not isinstance(merged_df.index, pd.DatetimeIndex):
             try:
                 merged_df.index = pd.to_datetime(merged_df.index)
             except:
                 print("Warning: Could not convert index to datetime")
         
-        # Load metadata
         try:
             metadata_df = pd.read_sql('SELECT * FROM pool_metadata', conn)
         except Exception as e:
@@ -328,18 +310,15 @@ def calculate_rolling_beta(dependent_series: pd.Series, independent_series: pd.S
         indep_window = independent_series.iloc[start_idx:i+1]
         
         if len(dep_window) >= min_periods:
-            # Calculate returns (first difference)
             dep_returns = dep_window.diff().dropna()
             indep_returns = indep_window.diff().dropna()
             
             if len(dep_returns) > 1 and len(indep_returns) > 1:
-                # Align the series
                 common_idx = dep_returns.index.intersection(indep_returns.index)
                 if len(common_idx) > 1:
                     dep_aligned = dep_returns.loc[common_idx]
                     indep_aligned = indep_returns.loc[common_idx]
                     
-                    # Calculate beta
                     covariance = np.cov(dep_aligned, indep_aligned)[0, 1]
                     market_variance = np.var(indep_aligned)
                     
@@ -361,11 +340,9 @@ def purge_database(db_filename: str = DEFAULT_DB_FILENAME) -> None:
         conn = sqlite3.connect(db_filename)
         cursor = conn.cursor()
         
-        # Drop existing tables if they exist
         cursor.execute("DROP TABLE IF EXISTS pool_data")
         cursor.execute("DROP TABLE IF EXISTS pool_metadata")
         
-        # Clean up any other artifacts
         cursor.execute("VACUUM")
         
         conn.commit()
@@ -391,13 +368,11 @@ def safe_api_request(url: str, max_retries: int = 3, is_coingecko: bool = False,
     """
     for attempt in range(max_retries):
         try:
-            # Add extra delay for CoinGecko free tier only
             if is_coingecko and attempt > 0:
                 extra_delay = 3 * attempt  # Progressive delay: 3s, 6s, 9s
                 print(f"CoinGecko free tier delay: waiting {extra_delay} seconds...")
                 time.sleep(extra_delay)
             
-            # Prepare headers for Pro API if key is available
             headers = {}
             if api_key:
                 headers['x-cg-pro-api-key'] = api_key  # CoinGecko expects lowercase header
@@ -407,7 +382,6 @@ def safe_api_request(url: str, max_retries: int = 3, is_coingecko: bool = False,
             
             response = requests.get(url, headers=headers, params=params)
             
-            # Debug response
             print(f"Response status: {response.status_code}")
             if response.status_code != 200:
                 print(f"Response text: {response.text[:200]}...")
@@ -418,7 +392,6 @@ def safe_api_request(url: str, max_retries: int = 3, is_coingecko: bool = False,
                 time.sleep(wait_time)
                 continue
             
-            # For CoinGecko free tier, add mandatory delay between requests
             if is_coingecko:
                 time.sleep(COINGECKO_FREE_TIER_DELAY)
             
@@ -472,7 +445,6 @@ def normalize_datetime_index(df: pd.DataFrame) -> pd.DataFrame:
     
     df_copy.index = df_copy.index.normalize()
     
-    # Make index timezone-naive
     if df_copy.index.tz is not None:
         df_copy.index = df_copy.index.tz_localize(None)
     
@@ -492,13 +464,62 @@ def print_data_summary(df: pd.DataFrame, name: str = "Dataset") -> None:
     print(f"Date range: {df.index.min()} to {df.index.max()}")
     print(f"Columns: {list(df.columns)}")
     
-    # Check for missing values
     missing_data = df.isnull().sum()
     if missing_data.any():
         print("Missing values:")
         for col, count in missing_data.items():
             if count > 0:
                 print(f"  {col}: {count} ({count/len(df)*100:.1f}%)")
+
+
+def fetch_polygon_data(symbol: str, start_date: str, end_date: str, api_key: str) -> Optional[pd.DataFrame]:
+    """
+    Fetch data from Polygon.io API for a specific symbol.
+    
+    Args:
+        symbol: Asset symbol (BTC, ETH, SPY, etc.)
+        start_date: Start date in YYYY-MM-DD format
+        end_date: End date in YYYY-MM-DD format
+        api_key: Polygon API key
+        
+    Returns:
+        DataFrame with price data, or None if failed
+    """
+    base_url = API_ENDPOINTS['polygon_base']
+    
+    if symbol in ['BTC', 'ETH']:
+        url = f"{base_url}/v2/aggs/ticker/X:{symbol}USD/range/1/day/{start_date}/{end_date}"
+    else:
+        url = f"{base_url}/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}"
+    
+    params = {
+        'apiKey': api_key,
+        'adjusted': 'true',
+        'sort': 'asc'
+    }
+    
+    try:
+        print(f"Fetching data for {symbol}...")
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if data.get('results'):
+            df = pd.DataFrame(data['results'])
+            df['date'] = pd.to_datetime(df['t'], unit='ms')
+            df = df[['date', 'c']].rename(columns={'c': 'close'})
+            df.set_index('date', inplace=True)
+            
+            print(f"Successfully fetched {len(df)} data points for {symbol}")
+            return df
+        else:
+            print(f"No data returned for {symbol}")
+            return None
+            
+    except Exception as e:
+        print(f"Error fetching {symbol}: {e}")
+        return None
 
 
 def create_subplot_grid(nrows: int, ncols: int, figsize: Tuple[int, int] = (16, 12)) -> Tuple[plt.Figure, np.ndarray]:
@@ -515,7 +536,6 @@ def create_subplot_grid(nrows: int, ncols: int, figsize: Tuple[int, int] = (16, 
     """
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     
-    # Ensure axes is always an array for consistent handling
     if nrows * ncols == 1:
         axes = np.array([axes])
     elif nrows == 1 or ncols == 1:
@@ -529,6 +549,7 @@ __all__ = [
     'add_logo_overlay',
     'fetch_pool_chart_data', 
     'fetch_ethereum_price_data',
+    'fetch_polygon_data',
     'load_data_from_db',
     'format_date_axis',
     'calculate_rolling_correlation',
