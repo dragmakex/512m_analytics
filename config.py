@@ -18,6 +18,9 @@ API_ENDPOINTS = {
 
 # Database Configuration
 DEFAULT_DB_FILENAME = "defi_prime_rate.db"
+DEFAULT_JSON_FILENAME = "defi_prime_rate.json"
+DEFAULT_JSON_DATA_FILENAME = "pool_data.json"
+DEFAULT_JSON_METADATA_FILENAME = "pool_metadata.json"
 
 # Pool Configuration
 SPECIFIC_POOL_IDS = [
@@ -100,6 +103,9 @@ def setup_plotting_style() -> None:
 __all__ = [
     'API_ENDPOINTS',
     'DEFAULT_DB_FILENAME',
+    'DEFAULT_JSON_FILENAME',
+    'DEFAULT_JSON_DATA_FILENAME',
+    'DEFAULT_JSON_METADATA_FILENAME',
     'SPECIFIC_POOL_IDS',
     'POOL_NAMES',
     'YOUSD_POOL_ID',

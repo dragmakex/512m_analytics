@@ -8,13 +8,15 @@ processes the data, and saves it to a SQLite database for analysis.
 import requests
 import pandas as pd
 import sqlite3
+import json
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
 from config import (
     API_ENDPOINTS, DEFAULT_DB_FILENAME, DEFAULT_FETCH_DAYS, 
-    RATE_LIMIT_DELAY, ROLLING_WINDOW_SIZES
+    RATE_LIMIT_DELAY, ROLLING_WINDOW_SIZES, DEFAULT_JSON_FILENAME,
+    DEFAULT_JSON_DATA_FILENAME, DEFAULT_JSON_METADATA_FILENAME
 )
 from utils import (
     fetch_pool_chart_data, purge_database, safe_api_request,
@@ -74,13 +76,15 @@ def fetch_top_stablecoin_pools_by_tvl(limit: int = 100) -> List[Dict[str, Any]]:
 
 
 def merge_and_save_pool_data(pool_data: Dict[str, Dict[str, Any]], 
-                           db_filename: str = DEFAULT_DB_FILENAME) -> Optional[pd.DataFrame]:
+                           db_filename: str = DEFAULT_DB_FILENAME,
+                           json_filename: str = DEFAULT_JSON_FILENAME) -> Optional[pd.DataFrame]:
     """
-    Merge all pool data by date and save to SQLite database.
+    Merge all pool data by date and save to both SQLite database and JSON file.
     
     Args:
         pool_data: Dictionary containing pool data
         db_filename: SQLite database filename
+        json_filename: JSON filename
         
     Returns:
         Merged and cleaned DataFrame, or None if failed
@@ -125,7 +129,9 @@ def merge_and_save_pool_data(pool_data: Dict[str, Dict[str, Any]],
     
     merged_df = _calculate_weighted_metrics(merged_df)
     
+    # Save data to both SQLite and JSON
     _save_to_database(merged_df, pool_data, db_filename)
+    _save_to_json(merged_df, pool_data, json_filename)
     
     return merged_df
 
@@ -239,6 +245,73 @@ def _save_to_database(merged_df: pd.DataFrame, pool_data: Dict[str, Dict[str, An
     print(f"Final dataset contains {len(pool_metadata)} pools with valid data")
 
 
+def _save_to_json(merged_df: pd.DataFrame, pool_data: Dict[str, Dict[str, Any]], 
+                  json_filename: str) -> None:
+    """
+    Save merged data and metadata to JSON file.
+    
+    Args:
+        merged_df: Merged DataFrame to save
+        pool_data: Original pool data for metadata
+        json_filename: JSON filename
+    """
+    print(f"Saving data to JSON files...")
+    
+    # Prepare pool_data for JSON export
+    pool_data_for_json = {}
+    
+    # Convert DataFrame to dictionary with date strings as keys
+    for date in merged_df.index:
+        date_str = str(date)
+        pool_data_for_json[date_str] = {}
+        
+        for col in merged_df.columns:
+            value = merged_df.loc[date, col]
+            # Handle NaN values - convert to None for JSON compatibility
+            if pd.isna(value):
+                pool_data_for_json[date_str][col] = None
+            else:
+                pool_data_for_json[date_str][col] = float(value)
+    
+    # Create pool metadata (same as for SQLite)
+    pool_metadata = _create_pool_metadata(merged_df, pool_data)
+    
+    # Save pool data to separate file
+    pool_data_filename = DEFAULT_JSON_DATA_FILENAME
+    pool_data_export = {
+        'pool_data': pool_data_for_json,
+        'export_info': {
+            'export_timestamp': datetime.now().isoformat(),
+            'date_range': {
+                'start': str(merged_df.index.min()),
+                'end': str(merged_df.index.max())
+            },
+            'total_data_points': len(merged_df)
+        }
+    }
+    
+    with open(pool_data_filename, 'w') as f:
+        json.dump(pool_data_export, f, indent=2, default=str)
+    
+    # Save pool metadata to separate file
+    pool_metadata_filename = DEFAULT_JSON_METADATA_FILENAME
+    pool_metadata_export = {
+        'pool_metadata': pool_metadata,
+        'export_info': {
+            'export_timestamp': datetime.now().isoformat(),
+            'total_pools': len(pool_metadata)
+        }
+    }
+    
+    with open(pool_metadata_filename, 'w') as f:
+        json.dump(pool_metadata_export, f, indent=2, default=str)
+    
+    print(f"Data successfully saved to:")
+    print(f"  - {pool_data_filename}")
+    print(f"  - {pool_metadata_filename}")
+    print(f"JSON export contains {len(pool_metadata)} pools with valid data")
+
+
 def _create_pool_metadata(merged_df: pd.DataFrame, 
                          pool_data: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -268,6 +341,9 @@ def _create_pool_metadata(merged_df: pd.DataFrame,
                 'name': pool_name,
                 'current_tvl': pool_info['current_tvl'],
                 'current_apy': pool_info['current_apy'],
+                'chain': pool_info.get('chain', 'Unknown'),
+                'project': pool_info.get('project', 'Unknown'),
+                'symbol': pool_info.get('symbol', 'Unknown'),
                 'last_updated': datetime.now().isoformat()
             })
     
@@ -285,14 +361,12 @@ def fetch_and_process_pools(limit: int = 100, days: int = DEFAULT_FETCH_DAYS) ->
     Returns:
         Dictionary containing processed pool data
     """
-    # Fetch top pools
     top_pools = fetch_top_stablecoin_pools_by_tvl(limit)
     
     if not top_pools:
         print("No pools fetched. Exiting.")
         return {}
     
-    # Display top pools info
     print("\nTop 10 pools by TVL:")
     for i, pool in enumerate(top_pools[:10]):
         tvl = pool['tvlUsd']
@@ -300,7 +374,6 @@ def fetch_and_process_pools(limit: int = 100, days: int = DEFAULT_FETCH_DAYS) ->
         name = pool.get('name', 'Unknown')
         print(f"{i+1}. {name} - TVL: ${tvl:,.0f} - APY: {apy:.2f}%")
     
-    # Fetch historical data for each pool
     print(f"\nFetching historical data for {len(top_pools)} pools...")
     pool_data = {}
     
@@ -310,14 +383,20 @@ def fetch_and_process_pools(limit: int = 100, days: int = DEFAULT_FETCH_DAYS) ->
         
         df = fetch_pool_chart_data(pool_id, pool_name, days)
         if validate_dataframe(df):
+            symbol = pool.get('symbol', 'Unknown')
+            if isinstance(symbol, list):
+                symbol = ', '.join(symbol)
+            
             pool_data[pool_id] = {
                 'data': df,
                 'name': pool_name,
                 'current_tvl': pool['tvlUsd'],
-                'current_apy': pool.get('apy', 0)
+                'current_apy': pool.get('apy', 0),
+                'chain': pool.get('chain', 'Unknown'),
+                'project': pool.get('project', 'Unknown'),
+                'symbol': symbol
             }
         
-        # Add small delay to avoid rate limiting
         time.sleep(RATE_LIMIT_DELAY)
     
     return pool_data
@@ -348,7 +427,10 @@ def print_summary_statistics(merged_df: pd.DataFrame, pool_data: Dict[str, Dict[
         print(f"Current DeFi Prime Rate: {current_apy:.4f}%")
         print(f"Mean DeFi Prime Rate: {mean_apy:.4f}%")
     
-    print(f"\nDatabase has been completely refreshed with current data.")
+    print(f"\nData has been exported to:")
+    print(f"  - SQLite: {DEFAULT_DB_FILENAME}")
+    print(f"  - JSON Data: {DEFAULT_JSON_DATA_FILENAME}")
+    print(f"  - JSON Metadata: {DEFAULT_JSON_METADATA_FILENAME}")
     print(f"All old data has been purged to prevent stale information.")
 
 
