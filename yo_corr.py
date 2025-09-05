@@ -318,7 +318,7 @@ def _plot_scatter_with_trend(ax: plt.Axes, merged_df: pd.DataFrame,
                 linestyle='--',
                 label=f'Trend: y = {z[0]:.3f}x + {z[1]:.3f}')
     
-    ax.set_xlabel('DeFi Prime Rate (%)')
+    ax.set_xlabel('Stablecoin Prime Rate (%)')
     ax.set_ylabel('yoUSD APY (%)')
     ax.set_title('Daily Values Scatter Plot')
     ax.legend(fontsize=8)

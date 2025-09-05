@@ -1,5 +1,5 @@
 """
-Stablecoin Prime Rate (SPR) Fetcher Module
+DeFi Prime Rate (SPR) Fetcher Module
 
 This module fetches top stablecoin pools by TVL from DeFiLlama,
 processes the data, and saves it to a SQLite database for analysis.

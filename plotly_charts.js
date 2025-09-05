@@ -1,5 +1,5 @@
 /**
- * Self-Contained DeFi Prime Rate Chart for Squarespace
+ * Self-Contained Stablecoin Prime Rate Chart for Squarespace
  * 
  * This single file contains everything needed:
  * - Plotly.js library (loaded from CDN)
@@ -42,7 +42,7 @@
     // Load data from GitHub Pages
     async function loadData() {
         try {
-            console.log('🔄 Loading DeFi data...');
+            console.log('🔄 Loading Stablecoin Prime Rate data...');
             const response = await fetch(CONFIG.dataUrl);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -181,7 +181,7 @@
             displaylogo: false,
             toImageButtonOptions: {
                 format: 'png',
-                filename: 'defi_prime_rate_chart',
+                filename: 'stablecoin_prime_rate_chart',
                 height: 600,
                 width: 1200,
                 scale: 1
@@ -212,7 +212,7 @@
         const statsHtml = `
             <div style="text-align: center; margin-top: 20px; font-family: serif;">
                 <div style="background: rgba(247,243,236,0.9); padding: 15px; border-radius: 8px; border: 1px solid #ddd; display: inline-block;">
-                    <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #333;">Latest DeFi Prime Rate</div>
+                    <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #333;">Latest Stablecoin Prime Rate</div>
                     <div style="font-size: 18px; margin-bottom: 5px;">
                         <span style="color: ${THEME_PALETTE[3]}; font-weight: bold;">${currentAPY.toFixed(4)}%</span>
                         <span style="color: ${changeColor}; font-size: 12px; margin-left: 8px;">
@@ -250,14 +250,14 @@
 
     // Main initialization function
     async function initializeChart() {
-        console.log('🚀 Initializing DeFi Prime Rate Chart...');
+        console.log('🚀 Initializing Stablecoin Prime Rate Chart...');
 
         // Create container HTML
         const containerHtml = `
             <div id="defi-chart-container" style="width: 100%; max-width: 1200px; margin: 20px auto; padding: 0 15px;">
                 <div style="text-align: center; margin-bottom: 15px;">
                     <div style="font-family: serif; font-size: 16px; color: #333; font-weight: bold;">
-                        Interactive DeFi Prime Rate Tracker
+                        Interactive Stablecoin Prime Rate Tracker
                     </div>
                     <div style="font-family: serif; font-size: 11px; color: #666; margin-top: 5px;">
                         Real-time tracking of top stablecoin pool yields • Hover for details
