@@ -14,6 +14,13 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import logging
 
+# Try to load .env file if it exists (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not available (e.g., in GitHub Actions)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,7 +53,7 @@ class TelegramBot:
 
 
 class DataLoader:
-    def __init__(self, data_dir: str = "data"):
+    def __init__(self, data_dir: str = "../data"):
         """Initialize data loader with data directory path."""
         self.data_dir = data_dir
         self.pool_data_file = os.path.join(data_dir, "pool_data.json")
