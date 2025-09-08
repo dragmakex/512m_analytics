@@ -14,8 +14,8 @@
     
     // Configuration - Update these URLs after setting up GitHub Pages
     const CONFIG = {
-        dataUrl: 'https://dragmakex.github.io/512m_analytics/pool_data.json',
-        metadataUrl: 'https://dragmakex.github.io/512m_analytics/pool_metadata.json',
+        dataUrl: 'https://dragmakex.github.io/512m_analytics/data/pool_data.json',
+        metadataUrl: 'https://dragmakex.github.io/512m_analytics/data/pool_metadata.json',
         logoUrl: 'https://dragmakex.github.io/512m_analytics/512m_logo.png'
     };
 

@@ -17,10 +17,10 @@ API_ENDPOINTS = {
 }
 
 # Database Configuration
-DEFAULT_DB_FILENAME = "defi_prime_rate.db"
-DEFAULT_JSON_FILENAME = "defi_prime_rate.json"
-DEFAULT_JSON_DATA_FILENAME = "pool_data.json"
-DEFAULT_JSON_METADATA_FILENAME = "pool_metadata.json"
+DEFAULT_DB_FILENAME = "data/defi_prime_rate.db"
+DEFAULT_JSON_FILENAME = "data/defi_prime_rate.json"
+DEFAULT_JSON_DATA_FILENAME = "data/pool_data.json"
+DEFAULT_JSON_METADATA_FILENAME = "data/pool_metadata.json"
 
 # Pool Configuration
 SPECIFIC_POOL_IDS = [

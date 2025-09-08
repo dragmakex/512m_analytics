@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 
-def connect_to_database(db_path: str = "defi_prime_rate.db") -> sqlite3.Connection:
+def connect_to_database(db_path: str = "data/defi_prime_rate.db") -> sqlite3.Connection:
     """
     Connect to the SQLite database.
     

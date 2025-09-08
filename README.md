@@ -27,9 +27,18 @@ This project fetches data from DeFiLlama and other sources to:
 
 ### Data Files
 
-- **`defi_prime_rate.db`** - SQLite database containing historical pool data
+- **`data/defi_prime_rate.db`** - SQLite database containing historical pool data
 - **`512m_logo.png`** - Logo for plot overlays
 - **`.env`** - Environment variables (not included, see setup)
+
+### Visualization Scripts
+
+- **`scripts/plotly_charts.js`** - Main Plotly visualization script for DeFi Prime Rate analysis
+- **`scripts/plotly_common.js`** - Common utilities and configurations for Plotly charts
+- **`scripts/spr_charts.js`** - Specific Prime Rate visualization components
+- **`scripts/yo_corr_charts.js`** - yoUSD correlation analysis visualizations
+- **`scripts/corr_analysis_charts.js`** - Market correlation analysis charts
+- **`scripts/specific_pools_charts.js`** - Specific pool comparison visualizations
 
 ## Setup
 
