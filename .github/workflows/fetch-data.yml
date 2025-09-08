@@ -38,7 +38,7 @@ jobs:
     
     - name: Commit and push data files
       run: |
-        git add pool_data.json pool_metadata.json defi_prime_rate.db
+        git add data/pool_data.json data/pool_metadata.json data/defi_prime_rate.db
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
